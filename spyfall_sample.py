@@ -62,7 +62,7 @@ def sample_sequence(*, hparams, length, weights, contexts, terminals=[], batch_s
             presents = []
             for past in pasts:
                 l, p = step(hparams, prev, past)
-                all_logits.append(l[:, -1, :] / tf.to_float(temperature))
+                all_logits.append(l[:, -1, :] / tf.cast(temperature, tf.float32))
                 presents.append(p)
 
             # samples from distribution that is linear combination of distribution
@@ -84,7 +84,7 @@ def sample_sequence(*, hparams, length, weights, contexts, terminals=[], batch_s
             all_logits.append(l[:, -1, :])
             presents.append(p)
         logits = tf.tensordot(tf.stack(all_logits, axis=-1), weights, axes=1)
-        logits /= tf.to_float(temperature) * tf.norm(weights, ord=1)
+        logits /= tf.cast(temperature, tf.float32) * tf.norm(weights, ord=1)
         logits = top_k_logits(logits, k=top_k)
         logits = top_p_logits(logits, p=top_p)
         samples = tf.multinomial(logits, num_samples=1, output_dtype=tf.int32)
@@ -109,12 +109,12 @@ def sample_sequence(*, hparams, length, weights, contexts, terminals=[], batch_s
         return final_vars[-1]
 
 
-def sequence_perplex(*, hparams, context, sequence, batch_size=None):
+def sequence_lprob(*, hparams, context, sequence, batch_size=None):
 
     def step(hparams, tokens, next_word, past=None):
         lm_output = model.model(hparams=hparams, X=tokens, past=past, reuse=tf.AUTO_REUSE)
 
-        logit = lm_output['logits'][:, -1, next_word[0]]
+        logit = lm_output['logits'][:, -1, next_word]
         logit = tf.expand_dims(logit, 1)
         presents = lm_output['present']
         presents.set_shape(model.past_shape(hparams=hparams, batch_size=batch_size))
@@ -125,15 +125,15 @@ def sequence_perplex(*, hparams, context, sequence, batch_size=None):
         sequence = tf.convert_to_tensor(sequence)
 
         def body(index, past, logits):
-            tokens = tf.concat([context, sequence[:, :index]], axis = -1)
-            logit, presents = step(hparams, tokens, sequence[:, index], past=past)
+            logit, presents = step(hparams, sequence[:, index-1:index], sequence[0, index], past=past)
             return [
                 index + tf.constant(1),
-                presents if past is None else tf.concat([past, presents], axis=-2),
-                logit if logits is None else tf.concat([logits, logit], axis=-1)
+                tf.concat([past, presents], axis=-2),
+                tf.concat([logits, logit], axis=-1)
             ]
 
-        index, past, logits = body(tf.constant(0), None, None)
+        index = tf.constant(1)
+        logits, past = step(hparams, context, sequence[0, index], None)
 
         def cond(*args):
             return True
@@ -154,4 +154,4 @@ def sequence_perplex(*, hparams, context, sequence, batch_size=None):
             back_prop=False,
         )
 
-        return tf.reduce_sum(logits) / tf.cast(tf.size(logits), tf.float32)
+        return tf.math.divide(tf.reduce_sum(logits), tf.cast(tf.size(logits), tf.float32))
