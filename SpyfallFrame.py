@@ -143,8 +143,8 @@ def round(locprompts, locpro, players, humans):
                     IF bot is a spy: call on it to guess (you may need to provide it with the location prompts
                     as options, if so pass that as a parameter to round()) - if it is above a confidence level 
                     (we can try 0.75) it will return a guess (***make sure to also cancel alarm w/ signal.alarm(0)
-                    , set win_spy (boolean did spy win) and set round_over to true) REFERENCE GUESS() ABOVE- if its not 
-                    above the confidence level, it will return None,
+                    , set win_spy (boolean did spy win) and set round_over to true and break)
+                    REFERENCE GUESS() ABOVE- if its not  above the confidence level, it will return None,
                     so you just default to generating text, add to transcript, print comment
                     IF bot is not a spy: just generate text, add to transcript, print comment'''
                 else:
