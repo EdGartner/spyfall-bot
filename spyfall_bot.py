@@ -29,7 +29,6 @@ class Bot:
 
         self.players = players
         self.position = position
-        self.hide_info = hide_info
 
         self.batch_size = 1
         models_dir = os.path.expanduser(os.path.expandvars(models_dir))
@@ -51,7 +50,7 @@ class Bot:
                 contexts=self.gen_contexts,
                 terminals=self.enc.encode('.') + self.enc.encode('!') + self.enc.encode('?'),
                 batch_size=self.batch_size,
-                temperature=0.5, top_k=0, top_p=0.9
+                temperature=0.5, top_k=0, top_p=0.95
             )
             self.p_context = tf.placeholder(tf.int32, [self.batch_size, None])
             self.p_sequence = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -74,7 +73,7 @@ class Bot:
         if self.spy:
             weights = np.ones_like(self.prompts)
         else:
-            weights = self.hide_info * np.ones_like(self.prompts)
+            weights = np.ones_like(self.prompts) * hide_info
             weights[self.index] = 1
         
         text = ' '.join(transcript)
@@ -123,11 +122,11 @@ class Bot:
                 self.p_context: [prmt for _ in range(self.batch_size)],
                 self.p_sequence: [sequence for _ in range(self.batch_size)]
             }))
-        self.saved = lprobs
         scale = np.min(lprobs) / 2 # for numerical stability
         probs = np.exp(np.subtract(lprobs, scale, dtype=np.float64))
         probs /= np.linalg.norm(probs, 1)
         if np.max(probs) > confidence:
             return np.argmax(probs)
+        self.saved = probs
         return False
 
