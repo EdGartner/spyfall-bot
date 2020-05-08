@@ -50,7 +50,7 @@ class Bot:
                 contexts=self.gen_contexts,
                 terminals=self.enc.encode('.') + self.enc.encode('!') + self.enc.encode('?'),
                 batch_size=self.batch_size,
-                temperature=0.5, top_k=0, top_p=0.95
+                temperature=1, top_k=40, top_p=0.9
             )
             self.p_context = tf.placeholder(tf.int32, [self.batch_size, None])
             self.p_sequence = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -75,6 +75,7 @@ class Bot:
         else:
             weights = np.ones_like(self.prompts) * hide_info
             weights[self.index] = 1
+            weights /= np.linalg.norm(weights)
         
         text = ' '.join(transcript)
         contexts = [[prmt + self.enc.encode(text) for _ in range(self.batch_size)] for prmt in self.prompts]
@@ -122,11 +123,10 @@ class Bot:
                 self.p_context: [prmt for _ in range(self.batch_size)],
                 self.p_sequence: [sequence for _ in range(self.batch_size)]
             }))
-        scale = np.min(lprobs) / 2 # for numerical stability
-        probs = np.exp(np.subtract(lprobs, scale, dtype=np.float64))
+        probs = np.exp(np.multiply(lprobs, np.sqrt(len(sequence)), dtype=np.float64))
         probs /= np.linalg.norm(probs, 1)
+        self.saved = probs
         if np.max(probs) > confidence:
             return np.argmax(probs)
-        self.saved = probs
         return False
 
