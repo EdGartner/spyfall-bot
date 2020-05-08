@@ -4,6 +4,7 @@ import random
 import time
 import signal
 import tkinter
+from spyfall_bot import Bot
 from tkinter import messagebox
 
 
