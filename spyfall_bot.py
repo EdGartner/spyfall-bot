@@ -108,7 +108,7 @@ class Bot:
         off_probs = [np.mean(np.exp(np.subtract(ls, scale, dtype=np.float64))) for ls in off_lprobs]
         on_probs = [np.mean(np.exp(np.subtract(ls, scale, dtype=np.float64))) for ls in on_lprobs]
         self.saved = [a / b for a, b in zip(on_probs, off_probs)]
-        self.saved.pop(self.position)
+        self.saved[self.position] = np.inf
         return np.argmin(self.saved)
 
     def guess(self, transcript, confidence=0.75):
