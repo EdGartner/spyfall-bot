@@ -29,7 +29,6 @@ class Bot:
 
         self.players = players
         self.position = position
-        self.hide_info = hide_info
 
         self.batch_size = 1
         models_dir = os.path.expanduser(os.path.expandvars(models_dir))
@@ -51,7 +50,7 @@ class Bot:
                 contexts=self.gen_contexts,
                 terminals=self.enc.encode('.') + self.enc.encode('!') + self.enc.encode('?'),
                 batch_size=self.batch_size,
-                temperature=0.5, top_k=0, top_p=0.9
+                temperature=1, top_k=40, top_p=0.9
             )
             self.p_context = tf.placeholder(tf.int32, [self.batch_size, None])
             self.p_sequence = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -74,8 +73,9 @@ class Bot:
         if self.spy:
             weights = np.ones_like(self.prompts)
         else:
-            weights = self.hide_info * np.ones_like(self.prompts)
+            weights = np.ones_like(self.prompts) * hide_info
             weights[self.index] = 1
+            weights /= np.linalg.norm(weights)
         
         text = ' '.join(transcript)
         contexts = [[prmt + self.enc.encode(text) for _ in range(self.batch_size)] for prmt in self.prompts]
@@ -108,6 +108,7 @@ class Bot:
         off_probs = [np.mean(np.exp(np.subtract(ls, scale, dtype=np.float64))) for ls in off_lprobs]
         on_probs = [np.mean(np.exp(np.subtract(ls, scale, dtype=np.float64))) for ls in on_lprobs]
         self.saved = [a / b for a, b in zip(on_probs, off_probs)]
+        self.saved[self.position] = np.inf
         return np.argmin(self.saved)
 
     def guess(self, transcript, confidence=0.75):
@@ -122,10 +123,9 @@ class Bot:
                 self.p_context: [prmt for _ in range(self.batch_size)],
                 self.p_sequence: [sequence for _ in range(self.batch_size)]
             }))
-        self.saved = lprobs
-        scale = np.min(lprobs) / 2 # for numerical stability
-        probs = np.exp(np.subtract(lprobs, scale, dtype=np.float64))
+        probs = np.exp(np.multiply(lprobs, np.sqrt(len(sequence)), dtype=np.float64))
         probs /= np.linalg.norm(probs, 1)
+        self.saved = probs
         if np.max(probs) > confidence:
             return np.argmax(probs)
         return False
