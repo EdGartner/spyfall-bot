@@ -10,13 +10,14 @@ from gpt2.src import model
 class Bot:
 
     def __init__(self, prompts, prompt_index, players, position, 
-                model_name='355    M', models_dir='gpt2/models', hide_info=0.25):
+                model_name='355M', models_dir='gpt2/models'):
         """
         : prompts: list of all the potential prompts informing non-spy players 
         of the secret location
-        : index: index of the prompt for this game in prompts list
+        : prompt_index: index of the prompt for this game in prompts list
         : players: total number of players in the game
         : position: number of this bot in the order of player
+        : model_name: which dir in model_dir
         : model_dir: path to language model used
         """
 
@@ -67,7 +68,9 @@ class Bot:
     def close(self):
         self.sess.close()
         
-    def generate(self, transcript):
+    def generate(self, transcript, hide_info=0.25):
+        """ Returns a sentence based on prompt (if known) and transcript. 0 <= hide_info <= 1 decribes
+        how much to weigh the other prompts relative to the real prompt. """
         if self.spy:
             weights = np.ones_like(self.prompts)
         else:
@@ -108,7 +111,7 @@ class Bot:
         self.saved.pop(self.position)
         return np.argmin(self.saved)
 
-    def guess(self, transcript, confidence = 0.75):
+    def guess(self, transcript, confidence=0.75):
         """ Returns the most likely location from the bot's perspective with 
         a threshhold confidence, otherwise False """
 
