@@ -52,25 +52,31 @@ def guess(locprompts, locpro):
         return False
 
 
-def accuse(players):
+def accuse(players, humans, bots, spy, transcript):
     accused = ""
     while accused not in players:
         accused = input("Please enter the name of the person you would like to accuse: \n")
         if accused not in players:
             print("The accused is not one of the players. Try again.\n")
     pos_votes = 0
+    botNum = 0
     for i in range(len(players)):
-        if players[i] == accused: continue # skip over accused
-        if players[i] in humans:
+        current = players[i] # current player
+        if current == accused: continue # skip over accused
+        if current in humans:
             vote = ""
             while (vote != "n") and (vote != "y"):
-                vote = input("Player " + players[i] +": Will you accuse " + accused + "? (y/n)\n")
+                vote = input("Player " + current +": Will you accuse " + accused + "? (y/n)\n")
                 if (vote != "n") and (vote != "y"): print("Please enter correct input.")
             if vote == "y": pos_votes += 1
         else:
-            """@ED: IF THE BOT IS A SPY JUST SAY YES AKA INCREMENT POS_VOTES.
-            IF NOT SPY CALL ON BOT TO MAKE AN ACCUSATION: IF THE ACCUSATION IS THE SAME AS accused THEN
-            INCREMENT POS_VOTES. OTHERWISE DO NOTHING."""
+            if i == spy: # if spy, always vote yes
+                pos_votes += 1
+                botNum += 1
+            else:
+                if accused == players[bots[botNum].accuse(transcript)]: # if the accused is who the bot thinks, vote yes
+                    pos_votes += 1
+                botNum += 1
 
     if (pos_votes * 2) > (len(players)-1): # again count out one player because they're accused
         return accused
@@ -83,10 +89,10 @@ def timeout_handler(signal, frame):
 
 
 # remember to return who the spy was this time so they can be dealer next round
-def round(locprompts, locpro, players, humans):
+def round(locprompts, locpro, locIndex, players, humans):
     # collects the answers of non-spy characters in case spy is a bot.
     # recreates basis for analysis that a human spy would have: others comments
-    transcript = ""
+    transcript = []
 
     """@ED: THIS WAS ONE OF THE THINGS I DIDN'T UNDERSTAND. I DON'T KNOW WHAT INFO LIAM'S BOT
     USES TO FIND SOMEONE TO ACCUSE SO I DON'T KNOW IF THIS IS NECC. OR NEEDS TO BE REPLACED."""
@@ -102,9 +108,14 @@ def round(locprompts, locpro, players, humans):
     # choose spy randomly - spy is the index of the spy in players
     spy = random.randrange(len(players))
 
-    """@ED: BOTS ARE INITIALIZED HERE IN PARTICULAR WAYS BASED ON SPY/NONSPY STATUS. THESE 
-    PARTICULAR WAYS ARE DEFINED IN THE CONSTRUCTOR FOR THE BOT.  USE THE NONINTERSECTIONS B/W PLAYERS 
-    AND HUMANS TO FIND BOTS. """
+    bots = []
+    for i in range(len(players)):
+        current = players[i]
+        if current not in humans:
+            if i == spy:
+                bots.append(Bot(locprompts, None, players, humans))
+            else:
+                bots.append(Bot(locprompts, locIndex, players, humans))
 
     time.sleep(0.25)
     # demonstrate turns and give instructions for next step
@@ -136,25 +147,36 @@ def round(locprompts, locpro, players, humans):
     try:
         while not round_over:
             for k in range(len(players)):
+                botNum = 0
                 if players[k] not in humans:
-                    # temporary
-                    print("BOT GUESSES OR GENERATES")
-                    '''@ED: 
-                    IF bot is a spy: call on it to guess (you may need to provide it with the location prompts
-                    as options, if so pass that as a parameter to round()) - if it is above a confidence level 
-                    (we can try 0.75) it will return a guess (***make sure to also cancel alarm w/ signal.alarm(0)
-                    , set win_spy (boolean did spy win) and set round_over to true and break)
-                    REFERENCE GUESS() ABOVE- if its not  above the confidence level, it will return None,
-                    so you just default to generating text, add to transcript, print comment
-                    IF bot is not a spy: just generate text, add to transcript, print comment'''
+                    if k == spy:
+                        result = bots[botNum].guess(transcript)
+                        if result:
+                            signal.alarm(0)
+                            win_spy = guess(locprompts, locprompts[result])
+                            round_over = True
+                            break
+                        else:
+                            comment = bots[botNum].generate(transcript)
+                            transcript.append(comment)
+                            pscripts[k].join(" " + comment)
+                            print(comment + '\n')
+                    else:
+                        comment = bots[botNum].generate(transcript)
+                        transcript.append(comment)
+                        pscripts[k].join(" " + comment)
+                        print(comment + '\n')
+
+                    botNum += 1
                 else:
                     comment = input("Player " + players[k] + ", please provide a comment: \n")
                     spltcom = comment.split()
                     first = spltcom[0]
                     if first == "GUESS":
                         if k != spy:
-                            print("That was a bad idea. \n")
-                            continue # goes to next players turn
+                            k -= 1
+                            print("That was a bad idea. You are not the spy, so you cannot guess. \n")
+                            continue # goes to same player's turn
                         signal.alarm(0) #cancels alarm
                         # handles the end of the game in this case
                         win_spy = guess(locprompts, locpro)
@@ -162,15 +184,15 @@ def round(locprompts, locpro, players, humans):
                         break
 
                     if first != "ACCUSE":
-                        transcript.join(" " + comment)
-                        players[k].join(" " + comment)
+                        transcript.append(comment)
+                        pscripts[k].join(" " + comment)
                     else:
                         left = signal.alarm(0)
                         print("Paused. Seconds left:", left, ".\n Reminder that these are the players.")
                         for i in range(len(players)):
                             print((i + 1), "-", players[i], end="\n")
                         print("\n")
-                        accused = accuse(players)
+                        accused = accuse(players, humans, bots, spy, transcript)
                         if accused is not None:
                             if accused == players[spy]: return False, spy
                             else: return True, spy
@@ -195,14 +217,35 @@ def round(locprompts, locpro, players, humans):
 
 if __name__ == "__main__":
 
-    """@ED: PLEASE CHANGE this to a list of prompts instead of location names. Obv this is a lot of 
-    locations so downsize as you deem necessary """
+    locprompts = ["An airplane flies high in the clouds above the city.",
+    "Many people were using the bank, depositing and withdrawing money.",
+    "The beach was packed with people playing volleyball and swimming in the ocean.",
+    "A choir sung under the high arches and stained glass windows of the cathedral.",
+    "Trapeze artists flew and tigers roared inside the circus tent.",
+    "The holiday corporate party consisted of cake by the water cooler and gift-giving between co-workers.",
+    "The crusader army stormed into the city with bucklers and chaimail, cheering and shouting.",
+    "The casino blared with the sounds of slot machines and craps tables.",
+    "Two sisters relaxed with massages and a trip to the sauna in the day spa.",
+    "The diplomat entered the embassy in order to meet with a politician.",
+    "A boy was in the hospital after breaking his arm falling from a tree.",
+    "During their trip overseas, the family rented a room in the local hotel.",
+    "Jets were frequently seen flying in and out of the military base.",
+    "The movie studio was reknowned for their graphic effects work.",
+    "Out at sea on a cruise, the ocean liner was lively with dancing people.",
+    "The brothers slept on the passenger train ride across the country.",
+    "The captain directed the pirate ship to fire the cannons on the merchant vessel.",
+    "Researchers at the polar station closely monitored temperatures in the area.",
+    "A woman came into the police station to report that her house had been robbed.",
+    "Well-known chefs staffed the restaurant, giving it a reputation in the city.",
+    "Children played and laughed outside during recess on the school playground.",
+    "After their car accident, the family went to the service station to examine their car.",
+    "Astronauts in the space station had a view of Earth that few could boast.",
+    "Scientists on the deep-sea submarine researched hardy sea-floor marine life.",
+    "They found all the necessary ingredients at the supermarket to cook a great dinner.",
+    "The theater was showing a new popular superhero film that everyone wanted to see.",
+    "Professors at the university worked with students to perform research.",
+    "Soldiers in the World War II squad stormed the beach during the invasion."]
 
-    locprompts = ["Airplane", "Bank", "Beach", "Cathedral", "Circus Tent", "Corporate Party", "Crusader Army",
-                 "Casino", "Day Spa", "Embassy", "Hospital", "Hotel", "Military Base", "Movie Studio", "Ocean Liner",
-                 "Passenger Train", "Pirate Ship", "Polar Station", "Police Station", "Restaurant", "School",
-                 "Service Station", "Space Station", "Submarine", "Supermarket", "Theater", "University",
-                 "World War II Squad"]
     players = []
 
     print("Welcome to Spyfall! You can play with humans and up to 3 bots.")
@@ -261,7 +304,7 @@ if __name__ == "__main__":
 
     for r in range(rounds):
         print("\n______ROUND ", (r+1), "______")
-        spy_win, spy = round(locprompts, roundLocs[r], players, humans)
+        spy_win, spy = round(locprompts, roundLocs[r], r, players, humans)
         if not spy_win:
             print("The non-spies have won the round! Each of them is awarded two points.")
             for i in range(len(players)):
