@@ -144,7 +144,7 @@ def round(locprompts, locpro, locIndex, players, humans):
     signal.signal(signal.SIGALRM, timeout_handler)
 
     round_over = False
-    signal.alarm(15)
+    signal.alarm(480)
     try:
         while not round_over:
             for k in range(len(players)):
@@ -206,7 +206,7 @@ def round(locprompts, locpro, locIndex, players, humans):
             print("\n TIMES UP! TIME FOR FINAL ACCUSATIONS\n")
             for p in humans:
                 print("Player "+ p + ":\n")
-                accused = accuse(players)
+                accused = accuse(players, humans, bots, spy, transcript)
                 if accused is not None:
                     if accused == players[spy]:
                         return False, spy
