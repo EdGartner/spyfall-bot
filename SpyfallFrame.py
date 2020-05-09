@@ -114,9 +114,9 @@ def round(locprompts, locpro, locIndex, players, humans):
         current = players[i]
         if current not in humans:
             if i == spy:
-                bots.append(Bot(locprompts, None, players, humans))
+                bots.append(Bot(locprompts, None, len(players), i))
             else:
-                bots.append(Bot(locprompts, locIndex, players, humans))
+                bots.append(Bot(locprompts, locIndex, len(players), i))
 
     time.sleep(0.25)
     # demonstrate turns and give instructions for next step
