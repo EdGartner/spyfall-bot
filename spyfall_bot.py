@@ -20,7 +20,9 @@ class Bot:
         : model_name: which dir in model_dir
         : model_dir: path to language model used
         """
-
+        
+        tf.logging.set_verbosity(tf.logging.ERROR)
+        
         if prompt_index == None:
             self.spy = True
         else:
